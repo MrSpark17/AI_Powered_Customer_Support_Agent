@@ -1,0 +1,50 @@
+services:
+  api:
+    build: .
+    image: support-copilot:latest
+    container_name: support-copilot-api
+    command: python main.py
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./knowledge_base:/app/knowledge_base
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()"
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    networks:
+      - support-copilot
+
+  dashboard:
+    image: support-copilot:latest
+    container_name: support-copilot-dashboard
+    command: python -m streamlit run app.py --server.address 0.0.0.0 --server.port 8501
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    environment:
+      # Service-to-service calls stay on Docker's private network. This avoids
+      # routing through the host's published port, which EC2 can reject.
+      - API_BASE_URL=http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - support-copilot
+    volumes:
+      - ./data:/app/data
+      - ./knowledge_base:/app/knowledge_base
+
+networks:
+  support-copilot:
+    driver: bridge
